@@ -739,19 +739,6 @@ part1 = '''<!DOCTYPE html>
   <div class="toast-container" id="toastContainer"></div>
 
   <script>
-'''
-
-with open('/mnt/agents/output/index.html', 'w', encoding='utf-8') as f:
-    f.write(part1)
-
-print("Part 1 written successfully")
-print(f"Length: {len(part1)} chars")
-    
-part2 = '''    // ═══════════════════════════════════════════════════════════════
-    //  ARSHAD FLIX v2.0 - PRO Edition
-    //  TMDB Auto-Enrichment | Admin Lock | Delete | Search Info
-    // ═══════════════════════════════════════════════════════════════
-
     const CONFIG = {
       TMDB_API_KEY: '8245a0c11d252b0bf3127e59b54ccc85',
       TMDB_BASE_URL: 'https://api.themoviedb.org/3',
@@ -1449,10 +1436,4 @@ part2 = '''    // ════════════════════�
     }
   </script>
 </body>
-</html>'''
-
-with open('/mnt/agents/output/index.html', 'a', encoding='utf-8') as f:
-    f.write(part2)
-
-print("Part 2 written successfully")
-print(f"Length: {len(part2)} chars")
+</html>
