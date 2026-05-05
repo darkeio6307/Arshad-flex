@@ -737,13 +737,15 @@ part1 = '''<!DOCTYPE html>
   </div>
 
   <div class="toast-container" id="toastContainer"></div>
-
-  <script>
+ 
+        <script>
     const CONFIG = {
       TMDB_API_KEY: '8245a0c11d252b0bf3127e59b54ccc85',
       TMDB_BASE_URL: 'https://api.themoviedb.org/3',
-      TMDB_IMG_URL: 'https://image.tmdb.org/t/p/w500',
-      TMDB_IMG_ORIGINAL: 'https://image.tmdb.org/t/p/original',
+      TMDB_IMG_URL: 'image.tmdb.org/t/p/w500', // https हटाया है प्रॉक्सी के लिए
+      TMDB_IMG_ORIGINAL: 'image.tmdb.org/t/p/original', // https हटाया है
+      PROXY_API: 'https://api.allorigins.win/raw?url=', // API को Jio ब्लॉक से बचाने के लिए
+      PROXY_IMG: 'https://wsrv.nl/?url=', // Images को फ़ास्ट लोड करने के लिए
       STREAM_BASE_URL: 'https://b2c33eef-85e2-43a6-be3e-32627e64259e-00-3t5wpkab6td74.pike.replit.dev/stream/',
       DEFAULT_POSTER: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&q=80',
       DEFAULT_BACKDROP: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1920&q=80',
@@ -760,20 +762,11 @@ part1 = '''<!DOCTYPE html>
       appId: "1:198271524977:web:d54ad6d58cd6c5c4103bd0"
     };
 
-    let app = null;
-    let db = null;
-    let moviesRef = null;
-    let allMovies = [];
-    let filteredMovies = [];
-    let currentFilter = 'all';
-    let currentSearch = '';
-    let currentHeroMovie = null;
-    let watchHistory = [];
-    let isAdminOpen = false;
-    let isPlayerOpen = false;
-    let isAdminUnlocked = false;
-    let tmdbCache = {};
-    let syncCount = 0;
+    let app = null, db = null, moviesRef = null;
+    let allMovies = [], filteredMovies = [], currentFilter = 'all', currentSearch = '';
+    let currentHeroMovie = null, watchHistory = [];
+    let isAdminOpen = false, isPlayerOpen = false, isAdminUnlocked = false;
+    let tmdbCache = {}, syncCount = 0;
 
     document.addEventListener('DOMContentLoaded', () => {
       initFirebase();
@@ -798,44 +791,23 @@ part1 = '''<!DOCTYPE html>
               timestamp: movie.timestamp || Date.now()
             }));
             allMovies.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-          } else {
-            allMovies = [];
-          }
+          } else { allMovies = []; }
           applyFilters();
           updateHero();
           updateContinueWatching();
-          showToast('Content synced from Firebase', 'success');
         }, (error) => {
-          console.error('Firebase error:', error);
-          showToast('Firebase connection failed. Using demo data.', 'error');
-          loadDemoData();
+          showToast('Firebase connection failed.', 'error');
         });
       } catch (e) {
-        console.error('Firebase init error:', e);
-        showToast('Firebase unavailable. Using demo data.', 'error');
-        loadDemoData();
+        showToast('Firebase unavailable.', 'error');
       }
     }
 
-    function loadDemoData() {
-      allMovies = [
-        { id: 'demo1', title: 'Inception', streamId: 'demo1', category: 'movie', genres: ['sci-fi','action'], rating: 8.8, year: 2010, timestamp: Date.now() },
-        { id: 'demo2', title: 'The Dark Knight', streamId: 'demo2', category: 'movie', genres: ['action','drama'], rating: 9.0, year: 2008, timestamp: Date.now()-1000 },
-        { id: 'demo3', title: 'Stranger Things', streamId: 'demo3', category: 'series', genres: ['sci-fi','horror'], rating: 8.7, year: 2016, timestamp: Date.now()-2000 },
-        { id: 'demo4', title: 'Attack on Titan', streamId: 'demo4', category: 'anime', genres: ['anime','action'], rating: 9.1, year: 2013, timestamp: Date.now()-3000 },
-        { id: 'demo5', title: 'Interstellar', streamId: 'demo5', category: 'movie', genres: ['sci-fi','drama'], rating: 8.6, year: 2014, timestamp: Date.now()-4000 },
-        { id: 'demo6', title: 'Breaking Bad', streamId: 'demo6', category: 'series', genres: ['drama','crime'], rating: 9.5, year: 2008, timestamp: Date.now()-5000 },
-      ];
-      allMovies.forEach(m => m.streamUrl = CONFIG.STREAM_BASE_URL + m.streamId);
-      applyFilters();
-      updateHero();
-    }
-
-    // ─── SYNC INDICATOR ───
     function showSyncIndicator() {
       syncCount++;
       document.getElementById('syncIndicator').classList.add('active');
     }
+    
     function hideSyncIndicator() {
       syncCount = Math.max(0, syncCount - 1);
       if (syncCount === 0) {
@@ -843,30 +815,25 @@ part1 = '''<!DOCTYPE html>
       }
     }
 
-    // ─── TMDB INTEGRATION (PRO) ───
+    // ─── THE BYPASS LOGIC (Proxy for India) ───
     async function fetchTMDBData(title) {
       if (!title || title.trim() === '') return null;
-      
       const cacheKey = title.toLowerCase().trim();
       if (tmdbCache[cacheKey]) return tmdbCache[cacheKey];
 
       showSyncIndicator();
-      
       try {
-        // Try full title search first
-        let response = await fetch(
-          CONFIG.TMDB_BASE_URL + '/search/multi?api_key=' + CONFIG.TMDB_API_KEY + '&query=' + encodeURIComponent(title) + '&language=en-US&page=1'
-        );
+        // API URL को Proxy के अंदर डाला गया है
+        let targetUrl = encodeURIComponent(`${CONFIG.TMDB_BASE_URL}/search/multi?api_key=${CONFIG.TMDB_API_KEY}&query=${title}&language=en-US&page=1`);
+        let response = await fetch(CONFIG.PROXY_API + targetUrl);
         let data = await response.json();
         
-        // If no results, try first two words
         if (!data.results || data.results.length === 0) {
           const words = title.trim().split(/\s+/);
           if (words.length > 2) {
             const shortTitle = words.slice(0, 2).join(' ');
-            response = await fetch(
-              CONFIG.TMDB_BASE_URL + '/search/multi?api_key=' + CONFIG.TMDB_API_KEY + '&query=' + encodeURIComponent(shortTitle) + '&language=en-US&page=1'
-            );
+            targetUrl = encodeURIComponent(`${CONFIG.TMDB_BASE_URL}/search/multi?api_key=${CONFIG.TMDB_API_KEY}&query=${shortTitle}&language=en-US&page=1`);
+            response = await fetch(CONFIG.PROXY_API + targetUrl);
             data = await response.json();
           }
         }
@@ -874,9 +841,10 @@ part1 = '''<!DOCTYPE html>
         if (data.results && data.results.length > 0) {
           let result = data.results.find(r => r.media_type === 'movie') || data.results[0];
           
+          // Image URLs को Image Proxy के अंदर डाला गया है
           const tmdbData = {
-            poster: result.poster_path ? CONFIG.TMDB_IMG_URL + result.poster_path : null,
-            backdrop: result.backdrop_path ? CONFIG.TMDB_IMG_ORIGINAL + result.backdrop_path : null,
+            poster: result.poster_path ? CONFIG.PROXY_IMG + CONFIG.TMDB_IMG_URL + result.poster_path : null,
+            backdrop: result.backdrop_path ? CONFIG.PROXY_IMG + CONFIG.TMDB_IMG_ORIGINAL + result.backdrop_path : null,
             overview: result.overview,
             rating: result.vote_average,
             year: (result.release_date || result.first_air_date || '').split('-')[0],
@@ -887,9 +855,7 @@ part1 = '''<!DOCTYPE html>
           hideSyncIndicator();
           return tmdbData;
         }
-      } catch (e) {
-        console.error('TMDB fetch error:', e);
-      }
+      } catch (e) { console.error('Proxy Fetch Error:', e); }
       
       hideSyncIndicator();
       return null;
@@ -897,7 +863,6 @@ part1 = '''<!DOCTYPE html>
 
     async function enrichMovie(movie) {
       if (movie.enriched && movie.poster) return movie;
-      
       const tmdbData = await fetchTMDBData(movie.title);
       if (tmdbData) {
         movie.poster = tmdbData.poster || movie.poster;
@@ -911,14 +876,11 @@ part1 = '''<!DOCTYPE html>
       return movie;
     }
 
-    // ─── UI RENDERING (PRO ASYNC) ───
     async function applyFilters() {
       filteredMovies = allMovies.filter(movie => {
         const matchesCategory = currentFilter === 'all' || movie.category === currentFilter;
-        const matchesGenre = currentFilter === 'all' || 
-          (movie.genres && movie.genres.some(g => g.toLowerCase().includes(currentFilter.toLowerCase())));
-        const matchesSearch = !currentSearch || 
-          movie.title.toLowerCase().includes(currentSearch.toLowerCase());
+        const matchesGenre = currentFilter === 'all' || (movie.genres && movie.genres.some(g => g.toLowerCase().includes(currentFilter.toLowerCase())));
+        const matchesSearch = !currentSearch || movie.title.toLowerCase().includes(currentSearch.toLowerCase());
         return (matchesCategory || matchesGenre) && matchesSearch;
       });
       await renderGrid();
@@ -927,12 +889,10 @@ part1 = '''<!DOCTYPE html>
 
     async function renderGrid() {
       const grid = document.getElementById('movieGrid');
-      const countEl = document.getElementById('contentCount');
-      
-      countEl.textContent = '(' + filteredMovies.length + ')';
+      document.getElementById('contentCount').textContent = '(' + filteredMovies.length + ')';
       
       if (filteredMovies.length === 0) {
-        grid.innerHTML = '<div class="empty-state" style="grid-column: 1 / -1;"><i class="fas fa-film"></i><h3>No content found</h3><p>Try adjusting your filters or add new content via the Admin Panel</p></div>';
+        grid.innerHTML = '<div class="empty-state" style="grid-column: 1 / -1;"><i class="fas fa-film"></i><h3>No content found</h3></div>';
         return;
       }
 
@@ -961,8 +921,7 @@ part1 = '''<!DOCTYPE html>
       grid.querySelectorAll('.movie-card').forEach(card => {
         card.addEventListener('click', (e) => {
           if (e.target.closest('.card-delete')) return;
-          const id = card.dataset.id;
-          const movie = allMovies.find(m => m.id === id);
+          const movie = allMovies.find(m => m.id === card.dataset.id);
           if (movie) openPlayer(movie);
         });
       });
@@ -970,18 +929,14 @@ part1 = '''<!DOCTYPE html>
       grid.querySelectorAll('.card-delete').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          const id = btn.dataset.id;
-          deleteMovie(id);
+          deleteMovie(btn.dataset.id);
         });
       });
 
-      // PRO: Auto-enrich each card with TMDB data in background
       for (const movie of filteredMovies) {
         if (!movie.poster || !movie.enriched) {
           enrichMovie(movie).then((enriched) => {
-            if (enriched && enriched.tmdbLoaded) {
-              updateCardUI(enriched);
-            }
+            if (enriched && enriched.tmdbLoaded) updateCardUI(enriched);
           });
         }
       }
@@ -991,448 +946,210 @@ part1 = '''<!DOCTYPE html>
       const img = document.getElementById('img-' + movie.id);
       const meta = document.getElementById('meta-' + movie.id);
       const genre = document.getElementById('genre-' + movie.id);
-      
-      if (img && movie.poster) {
-        img.src = movie.poster;
-      }
-      if (meta && movie.rating) {
-        const rating = (movie.rating / 10 * 5).toFixed(1);
-        meta.innerHTML = '<span class="card-rating"><i class="fas fa-star"></i> ' + rating + '</span><span>' + (movie.year || '2024') + '</span>';
-      }
-      if (genre && movie.genres) {
-        genre.textContent = movie.genres.slice(0, 2).join(', ');
-      }
+      if (img && movie.poster) img.src = movie.poster;
+      if (meta && movie.rating) meta.innerHTML = '<span class="card-rating"><i class="fas fa-star"></i> ' + (movie.rating / 10 * 5).toFixed(1) + '</span><span>' + (movie.year || '2024') + '</span>';
+      if (genre && movie.genres) genre.textContent = movie.genres.slice(0, 2).join(', ');
     }
 
     async function updateHero() {
       if (allMovies.length === 0) return;
       const movie = allMovies[0];
       currentHeroMovie = movie;
-      
       await enrichMovie(movie);
       
-      const bg = document.getElementById('heroBg');
-      const title = document.getElementById('heroTitle');
-      const meta = document.getElementById('heroMeta');
-      const desc = document.getElementById('heroDesc');
-      const playBtn = document.getElementById('heroPlayBtn');
-      
-      bg.style.backgroundImage = "url('" + (movie.backdrop || CONFIG.DEFAULT_BACKDROP) + "')";
-      title.textContent = movie.title;
+      document.getElementById('heroBg').style.backgroundImage = "url('" + (movie.backdrop || CONFIG.DEFAULT_BACKDROP) + "')";
+      document.getElementById('heroTitle').textContent = movie.title;
       
       const rating = movie.rating ? '<span class="rating"><i class="fas fa-star"></i> ' + (movie.rating / 10 * 5).toFixed(1) + '</span>' : '';
       const year = movie.year ? '<span class="dot"></span><span>' + movie.year + '</span>' : '';
       const genres = movie.genres ? '<span class="dot"></span><span>' + movie.genres.slice(0, 3).join(' / ') + '</span>' : '';
       
-      meta.innerHTML = rating + year + genres;
-      desc.textContent = movie.overview || 'Stream this title now on Arshad Flix. Premium quality, zero buffering.';
-      
-      playBtn.onclick = () => openPlayer(movie);
+      document.getElementById('heroMeta').innerHTML = rating + year + genres;
+      document.getElementById('heroDesc').textContent = movie.overview || 'Stream this title now on Arshad Flix. Premium quality, zero buffering.';
+      document.getElementById('heroPlayBtn').onclick = () => openPlayer(movie);
       
       const content = document.getElementById('heroContent');
-      content.style.animation = 'none';
-      content.offsetHeight;
+      content.style.animation = 'none'; content.offsetHeight;
       content.style.animation = 'heroSlideUp 1s cubic-bezier(0.4, 0, 0.2, 1) forwards';
     }
 
-    // ─── SEARCH INFO BAR ───
     function updateSearchInfo() {
       const bar = document.getElementById('searchInfoBar');
       const text = document.getElementById('searchInfoText');
-      
       if (currentSearch && currentSearch.trim() !== '') {
         const found = allMovies.some(m => m.title.toLowerCase().includes(currentSearch.toLowerCase()));
         if (found) {
           bar.classList.add('active');
           text.textContent = '"' + currentSearch + '" is available -- Watch Now!';
-        } else {
-          bar.classList.remove('active');
-        }
-      } else {
-        bar.classList.remove('active');
-      }
+        } else { bar.classList.remove('active'); }
+      } else { bar.classList.remove('active'); }
     }
 
-    // ─── PLAYER ───
     function openPlayer(movie) {
       isPlayerOpen = true;
       const overlay = document.getElementById('playerOverlay');
       const wrapper = document.getElementById('playerWrapper');
-      const title = document.getElementById('playerTitle');
-      const desc = document.getElementById('playerDesc');
       
       wrapper.innerHTML = '<video controls autoplay style="width:100%;height:100%;object-fit:contain;"><source src="' + movie.streamUrl + '" type="video/mp4">Your browser does not support the video tag.</video>';
-      
-      title.textContent = movie.title;
-      desc.textContent = movie.overview || 'Now playing...';
+      document.getElementById('playerTitle').textContent = movie.title;
+      document.getElementById('playerDesc').textContent = movie.overview || 'Now playing...';
       
       overlay.classList.add('active');
       document.body.style.overflow = 'hidden';
-      
       addToHistory(movie);
       renderGrid();
     }
 
     function closePlayer() {
       isPlayerOpen = false;
-      const overlay = document.getElementById('playerOverlay');
-      const wrapper = document.getElementById('playerWrapper');
-      
-      overlay.classList.remove('active');
+      document.getElementById('playerOverlay').classList.remove('active');
       document.body.style.overflow = '';
-      
-      setTimeout(() => { wrapper.innerHTML = ''; }, 400);
+      setTimeout(() => { document.getElementById('playerWrapper').innerHTML = ''; }, 400);
     }
 
-    // ─── WATCH HISTORY ───
+    // History Functions
     function initWatchHistory() {
-      try {
-        const stored = localStorage.getItem('arshadflix_history');
-        if (stored) watchHistory = JSON.parse(stored);
-      } catch (e) { watchHistory = []; }
+      try { const stored = localStorage.getItem('arshadflix_history'); if (stored) watchHistory = JSON.parse(stored); } catch (e) { watchHistory = []; }
     }
-
     function addToHistory(movie) {
       watchHistory = watchHistory.filter(h => h.id !== movie.id);
-      watchHistory.unshift({
-        id: movie.id,
-        title: movie.title,
-        poster: movie.poster || CONFIG.DEFAULT_POSTER,
-        timestamp: Date.now(),
-        progress: 0
-      });
+      watchHistory.unshift({ id: movie.id, title: movie.title, poster: movie.poster || CONFIG.DEFAULT_POSTER, timestamp: Date.now(), progress: 0 });
       if (watchHistory.length > 50) watchHistory = watchHistory.slice(0, 50);
-      
-      try {
-        localStorage.setItem('arshadflix_history', JSON.stringify(watchHistory));
-      } catch (e) {}
-      
-      updateContinueWatching();
-      updateHistoryDrawer();
+      try { localStorage.setItem('arshadflix_history', JSON.stringify(watchHistory)); } catch (e) {}
+      updateContinueWatching(); updateHistoryDrawer();
     }
-
     function updateContinueWatching() {
       const section = document.getElementById('continueWatchingSection');
       const grid = document.getElementById('continueGrid');
-      
-      if (watchHistory.length === 0) {
-        section.style.display = 'none';
-        return;
-      }
-      
+      if (watchHistory.length === 0) { section.style.display = 'none'; return; }
       section.style.display = 'block';
-      const recent = watchHistory.slice(0, 6);
-      
-      grid.innerHTML = recent.map((item, i) => {
+      grid.innerHTML = watchHistory.slice(0, 6).map((item, i) => {
         return '<div class="movie-card" data-id="' + item.id + '" style="animation: heroSlideUp 0.5s ' + (i * 0.05) + 's both;">' +
-          '<img class="card-img" src="' + item.poster + '" alt="' + item.title + '" loading="lazy" onerror="this.src=\'' + CONFIG.DEFAULT_POSTER + '\'">' +
-          '<div class="continue-badge">Resume</div>' +
-          '<div class="card-play"><i class="fas fa-play"></i></div>' +
-          '<div class="card-overlay">' +
-            '<div class="card-title">' + item.title + '</div>' +
-            '<div class="history-progress"><div class="history-progress-bar" style="width:' + (Math.random() * 60 + 20) + '%"></div></div>' +
-          '</div>' +
-        '</div>';
+          '<img class="card-img" src="' + item.poster + '" onerror="this.src=\'' + CONFIG.DEFAULT_POSTER + '\'">' +
+          '<div class="continue-badge">Resume</div><div class="card-play"><i class="fas fa-play"></i></div>' +
+          '<div class="card-overlay"><div class="card-title">' + item.title + '</div><div class="history-progress"><div class="history-progress-bar" style="width:' + (Math.random() * 60 + 20) + '%"></div></div></div></div>';
       }).join('');
-      
-      grid.querySelectorAll('.movie-card').forEach(card => {
-        card.addEventListener('click', () => {
-          const movie = allMovies.find(m => m.id === card.dataset.id);
-          if (movie) openPlayer(movie);
-        });
-      });
+      grid.querySelectorAll('.movie-card').forEach(card => card.addEventListener('click', () => {
+        const movie = allMovies.find(m => m.id === card.dataset.id); if (movie) openPlayer(movie);
+      }));
     }
-
     function updateHistoryDrawer() {
       const list = document.getElementById('historyList');
-      
-      if (watchHistory.length === 0) {
-        list.innerHTML = '<div class="history-empty"><i class="fas fa-film"></i><p>No watch history yet</p></div>';
-        return;
-      }
-      
+      if (watchHistory.length === 0) { list.innerHTML = '<div class="history-empty"><i class="fas fa-film"></i><p>No watch history yet</p></div>'; return; }
       list.innerHTML = watchHistory.map(item => {
-        const date = new Date(item.timestamp).toLocaleDateString();
-        const progress = Math.floor(Math.random() * 60 + 20);
         return '<div class="history-item" data-id="' + item.id + '">' +
           '<img class="history-thumb" src="' + item.poster + '" onerror="this.src=\'' + CONFIG.DEFAULT_POSTER + '\'">' +
-          '<div class="history-info">' +
-            '<h4>' + item.title + '</h4>' +
-            '<p>Watched on ' + date + '</p>' +
-            '<div class="history-progress"><div class="history-progress-bar" style="width:' + progress + '%"></div></div>' +
-          '</div>' +
-        '</div>';
+          '<div class="history-info"><h4>' + item.title + '</h4><p>Watched on ' + new Date(item.timestamp).toLocaleDateString() + '</p></div></div>';
       }).join('');
-      
-      list.querySelectorAll('.history-item').forEach(item => {
-        item.addEventListener('click', () => {
-          const movie = allMovies.find(m => m.id === item.dataset.id);
-          if (movie) {
-            openPlayer(movie);
-            toggleHistoryDrawer(false);
-          }
-        });
-      });
+      list.querySelectorAll('.history-item').forEach(item => item.addEventListener('click', () => {
+        const movie = allMovies.find(m => m.id === item.dataset.id); if (movie) { openPlayer(movie); toggleHistoryDrawer(false); }
+      }));
     }
-
     function toggleHistoryDrawer(show) {
       const drawer = document.getElementById('historyDrawer');
-      if (show) {
-        updateHistoryDrawer();
-        drawer.classList.add('open');
-      } else {
-        drawer.classList.remove('open');
-      }
+      if (show) { updateHistoryDrawer(); drawer.classList.add('open'); } else { drawer.classList.remove('open'); }
     }
 
-    // ─── ADMIN PANEL (PASSWORD LOCKED) ───
+    // Admin Functions
     function toggleAdmin(show) {
       const overlay = document.getElementById('adminOverlay');
       isAdminOpen = show;
       if (show) {
-        overlay.classList.add('active');
-        document.body.style.overflow = 'hidden';
-        
+        overlay.classList.add('active'); document.body.style.overflow = 'hidden';
         if (!isAdminUnlocked) {
-          document.getElementById('passwordLock').style.display = 'block';
-          document.getElementById('adminForm').style.display = 'none';
-          document.getElementById('adminPassword').value = '';
-          setTimeout(() => document.getElementById('adminPassword').focus(), 100);
+          document.getElementById('passwordLock').style.display = 'block'; document.getElementById('adminForm').style.display = 'none';
+          document.getElementById('adminPassword').value = ''; setTimeout(() => document.getElementById('adminPassword').focus(), 100);
         } else {
-          document.getElementById('passwordLock').style.display = 'none';
-          document.getElementById('adminForm').style.display = 'block';
+          document.getElementById('passwordLock').style.display = 'none'; document.getElementById('adminForm').style.display = 'block';
           setTimeout(() => document.getElementById('adminTitle').focus(), 100);
         }
       } else {
-        overlay.classList.remove('active');
-        document.body.style.overflow = '';
-        clearAdminForm();
+        overlay.classList.remove('active'); document.body.style.overflow = '';
+        document.getElementById('adminTitle').value = ''; document.getElementById('adminStreamId').value = ''; document.getElementById('adminGenres').value = '';
       }
     }
-
     function unlockAdmin() {
       const input = document.getElementById('adminPassword');
       if (input.value === CONFIG.ADMIN_PASSWORD) {
-        isAdminUnlocked = true;
-        document.getElementById('passwordLock').style.display = 'none';
-        document.getElementById('adminForm').style.display = 'block';
-        document.getElementById('adminTitle').focus();
+        isAdminUnlocked = true; document.getElementById('passwordLock').style.display = 'none'; document.getElementById('adminForm').style.display = 'block'; document.getElementById('adminTitle').focus();
         showToast('Admin unlocked successfully', 'success');
       } else {
-        showToast('Wrong password! Try again.', 'error');
-        input.value = '';
-        input.style.borderColor = 'var(--primary)';
-        setTimeout(() => { input.style.borderColor = ''; }, 1000);
+        showToast('Wrong password! Try again.', 'error'); input.value = '';
       }
     }
-
-    function clearAdminForm() {
-      document.getElementById('adminTitle').value = '';
-      document.getElementById('adminStreamId').value = '';
-      document.getElementById('adminCategory').value = 'movie';
-      document.getElementById('adminGenres').value = '';
-    }
-
     async function submitAdminForm() {
       const title = document.getElementById('adminTitle').value.trim();
       const streamId = document.getElementById('adminStreamId').value.trim();
       const category = document.getElementById('adminCategory').value;
       const genresRaw = document.getElementById('adminGenres').value.trim();
       
-      if (!title || !streamId) {
-        showToast('Please fill in Title and Stream ID', 'error');
-        return;
-      }
+      if (!title || !streamId) { showToast('Please fill in Title and Stream ID', 'error'); return; }
       
-      const genres = genresRaw ? genresRaw.split(',').map(g => g.trim().toLowerCase()) : [category];
-      
-      const newMovie = {
-        title: title,
-        streamId: streamId,
-        category: category,
-        genres: genres,
-        timestamp: Date.now()
-      };
+      const newMovie = { title, streamId, category, genres: genresRaw ? genresRaw.split(',').map(g => g.trim().toLowerCase()) : [category], timestamp: Date.now() };
       
       try {
         if (db) {
           const newRef = await moviesRef.push(newMovie);
           showToast('Content added successfully!', 'success');
-          
-          // Immediately trigger TMDB search for the new title
-          const addedMovie = {
-            id: newRef.key,
-            ...newMovie,
-            streamUrl: CONFIG.STREAM_BASE_URL + streamId
-          };
-          
-          showToast('Fetching TMDB data for "' + title + '"...', 'info');
+          const addedMovie = { id: newRef.key, ...newMovie, streamUrl: CONFIG.STREAM_BASE_URL + streamId };
           enrichMovie(addedMovie).then((enriched) => {
             if (enriched.tmdbLoaded) {
-              showToast('TMDB poster loaded for "' + title + '"!', 'success');
-              // Update the movie in allMovies
               const idx = allMovies.findIndex(m => m.id === enriched.id);
-              if (idx !== -1) {
-                allMovies[idx] = enriched;
-                applyFilters();
-              }
+              if (idx !== -1) { allMovies[idx] = enriched; applyFilters(); }
             }
           });
-          
-          toggleAdmin(false);
-        } else {
-          allMovies.unshift({
-            id: 'local_' + Date.now(),
-            ...newMovie,
-            streamUrl: CONFIG.STREAM_BASE_URL + streamId
-          });
-          applyFilters();
-          updateHero();
-          showToast('Content added (local mode)', 'success');
           toggleAdmin(false);
         }
-      } catch (e) {
-        showToast('Failed to add content: ' + e.message, 'error');
-      }
+      } catch (e) { showToast('Failed to add content: ' + e.message, 'error'); }
     }
-
-    // ─── DELETE MOVIE ───
     async function deleteMovie(id) {
       if (!confirm('Are you sure you want to delete this content?')) return;
-      
       try {
-        if (db && moviesRef) {
-          await moviesRef.child(id).remove();
-          showToast('Content deleted successfully', 'success');
-        } else {
-          allMovies = allMovies.filter(m => m.id !== id);
-          applyFilters();
-          updateHero();
-          showToast('Content deleted (local mode)', 'success');
-        }
-      } catch (e) {
-        showToast('Failed to delete: ' + e.message, 'error');
-      }
+        if (db && moviesRef) { await moviesRef.child(id).remove(); showToast('Content deleted successfully', 'success'); }
+      } catch (e) { showToast('Failed to delete: ' + e.message, 'error'); }
     }
 
-    // ─── TOAST SYSTEM ───
     function showToast(message, type) {
       const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      toast.className = 'toast ' + type;
-      
-      const icons = { success: 'fa-check-circle', error: 'fa-circle-xmark', info: 'fa-circle-info' };
-      toast.innerHTML = '<i class="fas ' + (icons[type] || icons.info) + '"></i> ' + message;
-      
+      const toast = document.createElement('div'); toast.className = 'toast ' + type;
+      toast.innerHTML = '<i class="fas fa-info-circle"></i> ' + message;
       container.appendChild(toast);
-      
-      setTimeout(() => {
-        toast.style.animation = 'toastSlideOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards';
-        setTimeout(() => toast.remove(), 400);
-      }, 3000);
+      setTimeout(() => { toast.style.animation = 'toastSlideOut 0.4s forwards'; setTimeout(() => toast.remove(), 400); }, 3000);
     }
 
-    // ─── EVENT LISTENERS ───
     function initEventListeners() {
-      // Search
-      const searchInput = document.getElementById('searchInput');
-      searchInput.addEventListener('input', (e) => {
-        currentSearch = e.target.value;
-        applyFilters();
-      });
-
-      // Genre Pills
+      document.getElementById('searchInput').addEventListener('input', (e) => { currentSearch = e.target.value; applyFilters(); });
       document.getElementById('genrePills').addEventListener('click', (e) => {
         if (e.target.classList.contains('pill')) {
-          document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
-          e.target.classList.add('active');
-          currentFilter = e.target.dataset.genre;
-          document.getElementById('sectionLabel').textContent = 
-            currentFilter === 'all' ? 'All Content' : currentFilter.charAt(0).toUpperCase() + currentFilter.slice(1);
+          document.querySelectorAll('.pill').forEach(p => p.classList.remove('active')); e.target.classList.add('active');
+          currentFilter = e.target.dataset.genre; document.getElementById('sectionLabel').textContent = currentFilter === 'all' ? 'All Content' : currentFilter.charAt(0).toUpperCase() + currentFilter.slice(1);
           applyFilters();
         }
       });
-
-      // Nav links
-      document.querySelectorAll('.nav-links a').forEach(link => {
-        link.addEventListener('click', (e) => {
-          e.preventDefault();
-          document.querySelectorAll('.nav-links a').forEach(l => l.classList.remove('active'));
-          link.classList.add('active');
-          currentFilter = link.dataset.filter;
-          document.getElementById('sectionLabel').textContent = 
-            currentFilter === 'all' ? 'All Content' : currentFilter.charAt(0).toUpperCase() + currentFilter.slice(1);
-          document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
-          const pill = document.querySelector('.pill[data-genre="' + currentFilter + '"]');
-          if (pill) pill.classList.add('active');
-          applyFilters();
-          document.getElementById('heroSection').scrollIntoView({ behavior: 'smooth' });
-        });
-      });
-
-      // Player
+      document.querySelectorAll('.nav-links a').forEach(link => link.addEventListener('click', (e) => {
+        e.preventDefault(); document.querySelectorAll('.nav-links a').forEach(l => l.classList.remove('active')); link.classList.add('active');
+        currentFilter = link.dataset.filter; document.getElementById('sectionLabel').textContent = currentFilter === 'all' ? 'All Content' : currentFilter.charAt(0).toUpperCase() + currentFilter.slice(1);
+        document.querySelectorAll('.pill').forEach(p => p.classList.remove('active')); const pill = document.querySelector('.pill[data-genre="' + currentFilter + '"]'); if (pill) pill.classList.add('active');
+        applyFilters(); document.getElementById('heroSection').scrollIntoView({ behavior: 'smooth' });
+      }));
       document.getElementById('playerClose').addEventListener('click', closePlayer);
-      document.getElementById('playerOverlay').addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) closePlayer();
-      });
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && isPlayerOpen) closePlayer();
-      });
-
-      // Admin
+      document.getElementById('playerOverlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closePlayer(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && isPlayerOpen) closePlayer(); });
       document.getElementById('adminBtn').addEventListener('click', () => toggleAdmin(true));
       document.getElementById('adminClose').addEventListener('click', () => toggleAdmin(false));
       document.getElementById('adminCancel').addEventListener('click', () => toggleAdmin(false));
       document.getElementById('adminSubmit').addEventListener('click', submitAdminForm);
       document.getElementById('unlockBtn').addEventListener('click', unlockAdmin);
-      document.getElementById('adminPassword').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') unlockAdmin();
-      });
-      document.getElementById('adminOverlay').addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) toggleAdmin(false);
-      });
-
-      // Keyboard shortcut: Ctrl+Shift+A
-      document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
-          e.preventDefault();
-          toggleAdmin(!isAdminOpen);
-        }
-      });
-
-      // History
+      document.getElementById('adminPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') unlockAdmin(); });
+      document.getElementById('adminOverlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) toggleAdmin(false); });
+      document.addEventListener('keydown', (e) => { if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') { e.preventDefault(); toggleAdmin(!isAdminOpen); } });
       document.getElementById('historyBtn').addEventListener('click', () => toggleHistoryDrawer(true));
       document.getElementById('historyClose').addEventListener('click', () => toggleHistoryDrawer(false));
-
-      // Refresh
-      document.getElementById('refreshBtn').addEventListener('click', () => {
-        showToast('Refreshing content...', 'info');
-        if (moviesRef) {
-          moviesRef.once('value').then(() => {
-            showToast('Content refreshed!', 'success');
-          });
-        } else {
-          applyFilters();
-          showToast('Content refreshed!', 'success');
-        }
-      });
-
-      // Share button
-      document.getElementById('shareBtn').addEventListener('click', () => {
-        if (navigator.share) {
-          navigator.share({ title: 'Arshad Flix', text: 'Check out this on Arshad Flix!' });
-        } else {
-          showToast('Share feature not available', 'info');
-        }
-      });
+      document.getElementById('refreshBtn').addEventListener('click', () => { if (moviesRef) moviesRef.once('value'); });
     }
-
     function initNavbarScroll() {
       const navbar = document.getElementById('navbar');
-      window.addEventListener('scroll', () => {
-        if (window.scrollY > 50) navbar.classList.add('scrolled');
-        else navbar.classList.remove('scrolled');
-      });
+      window.addEventListener('scroll', () => { if (window.scrollY > 50) navbar.classList.add('scrolled'); else navbar.classList.remove('scrolled'); });
     }
   </script>
 </body>
